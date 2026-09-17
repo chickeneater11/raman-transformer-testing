@@ -4,5 +4,6 @@
 __pycache__/
 data/
 models/
+optuna_results/
 *.pt
 .DS_Store
