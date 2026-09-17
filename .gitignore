@@ -1,0 +1,8 @@
+.venv/
+.env
+.ipynb_checkpoints/
+__pycache__/
+data/
+models/
+*.pt
+.DS_Store
