@@ -28,8 +28,9 @@ ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / ".env")
 DATA = Path(os.environ.get("RAMAN_DATA_DIR", ROOT / "data")).expanduser()
 OUT = ROOT / "optuna_results"
-CLASSES = ["adenine", "dl-ala", "dl-phe", "dl-tyr", "glu", "RNA", "Lipid"]
-MOLECULES = CLASSES[:5]
+DEFAULT_CLASSES = ["adenine", "dl-ala", "dl-phe", "dl-tyr", "glu", "RNA", "Lipid"]
+CLASSES = DEFAULT_CLASSES.copy()
+MOLECULES = DEFAULT_CLASSES[:5]
 GRID = np.arange(450, 1451)
 KEEP = (GRID < 1250) | (GRID > 1450)
 SEED = 42
@@ -39,6 +40,17 @@ def seed_everything(seed):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+
+
+def configure_experiment(classes):
+    """Select classes and an isolated result directory for this run."""
+    global CLASSES, OUT
+    if len(classes) < 2 or len(set(classes)) != len(classes) or any(c not in DEFAULT_CLASSES for c in classes):
+        raise ValueError(f"Choose at least two unique classes from {DEFAULT_CLASSES}")
+    CLASSES = list(classes)
+    OUT = ROOT / "optuna_results"
+    if CLASSES != DEFAULT_CLASSES:
+        OUT = OUT / "_".join(CLASSES)
 
 
 def finish_spectra(values):
@@ -87,12 +99,16 @@ def read_lipid_rna(instrument):
 def load_data(instrument):
     chunks, labels = [], []
     for label in MOLECULES:
+        if label not in CLASSES:
+            continue
         x = read_molecule(instrument, label)
         chunks.append(x)
         labels.extend([CLASSES.index(label)] * len(x))
-    x, names = read_lipid_rna(instrument)
-    chunks.append(x)
-    labels.extend([CLASSES.index(name) for name in names])
+    if "RNA" in CLASSES or "Lipid" in CLASSES:
+        x, names = read_lipid_rna(instrument)
+        selected = np.isin(names, CLASSES)
+        chunks.append(x[selected])
+        labels.extend([CLASSES.index(name) for name in names[selected]])
     return np.concatenate(chunks), np.asarray(labels, dtype=np.int64)
 
 
@@ -193,8 +209,6 @@ def run_study(source_x, source_y, target_x, target_y, trials=8, epochs=8):
     seed_everything(SEED)
     torch.set_num_threads(min(4, os.cpu_count() or 1))
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-    source_x, source_y = load_data("renishaw")
-    target_x, target_y = load_data("horiba")
     indices = np.arange(len(source_y))
     train_idx, hold_idx = train_test_split(indices, test_size=0.4, random_state=SEED, stratify=source_y)
     val_idx, test_idx = train_test_split(hold_idx, test_size=0.5, random_state=SEED, stratify=source_y[hold_idx])
@@ -249,8 +263,9 @@ def run_study(source_x, source_y, target_x, target_y, trials=8, epochs=8):
     return result
 
 
-def run_from_notebook(renishaw_everything, horiba_everything, trials=8, epochs=8):
+def run_from_notebook(renishaw_everything, horiba_everything, trials=8, epochs=8, classes=None):
     """Use the two frames after the notebook's carbon-peak-cut cell (no reprocessing)."""
+    configure_experiment(DEFAULT_CLASSES if classes is None else classes)
     metadata = {"Virus", "Subtype", "Strain"}
     spectral_columns = sorted(
         set(renishaw_everything.columns).intersection(horiba_everything.columns) - metadata,
@@ -272,7 +287,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--trials", type=int, default=8)
     parser.add_argument("--epochs", type=int, default=8)
+    parser.add_argument("--classes", nargs="+", default=DEFAULT_CLASSES, choices=DEFAULT_CLASSES)
     args = parser.parse_args()
+    configure_experiment(args.classes)
     run_study(*load_data("renishaw"), *load_data("horiba"), trials=args.trials, epochs=args.epochs)
 
 

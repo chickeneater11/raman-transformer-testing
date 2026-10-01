@@ -50,4 +50,12 @@ For a standalone run that rebuilds the same prepared spectra from the Drive file
 .venv/bin/python optuna_biomolecules.py --trials 8 --epochs 8
 ```
 
+For the adenine/dl-ala/RNA-only experiment, run its dedicated notebook cell or:
+
+```bash
+.venv/bin/python optuna_biomolecules.py --classes adenine dl-ala RNA --trials 8 --epochs 8
+```
+
+Its results are isolated in `optuna_results/adenine_dl-ala_RNA/`.
+
 Rows from the same acquisition may be correlated, so the held-out Renishaw score measures within-dataset generalization, not necessarily new experimental batches. The Horiba score is a cross-instrument check.
