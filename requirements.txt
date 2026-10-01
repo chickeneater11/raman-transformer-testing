@@ -11,3 +11,4 @@ seaborn>=0.13,<1
 torch>=2.2,<3
 livelossplot>=0.5.6,<1
 optuna>=4,<5
+threadpoolctl>=3.1,<4

@@ -7,3 +7,4 @@ models/
 optuna_results/
 *.pt
 .DS_Store
+spectral_diagnostics_results/

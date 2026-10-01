@@ -59,3 +59,33 @@ For the adenine/dl-ala/RNA-only experiment, run its dedicated notebook cell or:
 Its results are isolated in `optuna_results/adenine_dl-ala_RNA/`.
 
 Rows from the same acquisition may be correlated, so the held-out Renishaw score measures within-dataset generalization, not necessarily new experimental batches. The Horiba score is a cross-instrument check.
+
+## Reproducible spectral diagnostics
+
+The final notebook section, **Reproducible biomolecule spectral diagnostics**, can run
+independently in a fresh project kernel. Run only that section to avoid starting the
+historical transformer/Optuna experiments. It reads `RAMAN_DATA_DIR` directly and uses
+`spectral_diagnostics.py`; it does not reuse earlier notebook dataframes.
+
+The analysis uses a seed of 42, fixed per-class row selection, a common 450–1450 cm⁻¹
+grid, and three matched preprocessing views (as loaded, ASLS, ASLS + min–max). It saves
+spectral means/spread, intensity and shape comparison matrices, lag/peak screens,
+leave-one-molecule-out affine response predictions, and residual/information maps.
+Plots are descriptive diagnostics, not classification accuracies or impossibility proofs.
+
+The last cell reruns the analysis and asserts exact equality of selected rows, input
+arrays, numerical outputs, metric tables, CSVs, and PNGs. Results and input hashes,
+selected row IDs, configuration, code hash, and package versions are saved in
+`spectral_diagnostics_results/<run_id>/` (ignored by Git). Numerical repeatability is
+scoped to identical inputs, code, configuration, and numerical environment; seeding
+alone cannot ensure bitwise results across different platforms or package versions.
+
+Lipid/RNA labels inherit the notebook's row-order convention (375 RNA, then 375 Lipid).
+Those CSVs may have upstream preprocessing; “as loaded” is not a claim of raw provenance.
+No carbon cut, quality filtering, KNN pairing, GPU training, or target-label tuning is used.
+
+Run the focused correctness checks with:
+
+```bash
+.venv/bin/python -m unittest test_spectral_diagnostics -v
+```
