@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "source_description": "Original RNA/lipid TXT exports in Downloads, before the filtering/preprocessing used for Drive CSVs, per user confirmation 2026-10-22.",
+  "assignment_basis": "File structures compared with known adenine_horiba.txt and adenine_renishaw.txt. Strong format-based inference, not embedded instrument metadata.",
+  "root_environment_variable": "RAMAN_RAW_DIR",
+  "default_root": "~/Downloads",
+  "files": [
+    {
+      "relative_path": "OneDrive_1_3-19-2026/lipid-5%-450-1800-10s-2.txt",
+      "instrument": "Renishaw",
+      "molecule": "Lipid",
+      "sha256": "12abeec65fb9f4b52c4eb78cf2eb9bfbfbc3aae27119d8e329a78037582cc857"
+    },
+    {
+      "relative_path": "OneDrive_1_3-19-2026/lipid-5%-450-1800-10s-3.txt",
+      "instrument": "Renishaw",
+      "molecule": "Lipid",
+      "sha256": "b141135a78aa063066fb95182643e747a123f5d079783a445482d3dd9079096b"
+    },
+    {
+      "relative_path": "OneDrive_1_3-19-2026/lipid-5%-450-1800-10s-4.txt",
+      "instrument": "Renishaw",
+      "molecule": "Lipid",
+      "sha256": "4b4972f3fc14b43a11cc317655e25789f2009679300075234cd1a97380ca4dfa"
+    },
+    {
+      "relative_path": "OneDrive_1_3-19-2026/lipid-5%-450-1800-10s.txt",
+      "instrument": "Renishaw",
+      "molecule": "Lipid",
+      "sha256": "4138b5642e57389d02eb31cf366e55a3697c63323ec0822c25fcbe57a1027d9c"
+    },
+    {
+      "relative_path": "OneDrive_1_4-9-2026/RNA-5%-450-1800-10s-2.txt",
+      "instrument": "Renishaw",
+      "molecule": "RNA",
+      "sha256": "cc6b0d1a9b52c62f89d1e02ccb1784fa69358d26b5a2a0420d22438fe505b900"
+    },
+    {
+      "relative_path": "OneDrive_1_4-9-2026/RNA-5%-450-1800-10s.txt",
+      "instrument": "Renishaw",
+      "molecule": "RNA",
+      "sha256": "b0419766c21349c30224f87e1c20f9c3656fce18e091e1605f8126695cc5cc7e"
+    },
+    {
+      "relative_path": "lipid _785 nm_600 gr_mm_2026_02_14_02_43_56_1_5s_x100_100_5__02_43_56_01.txt",
+      "instrument": "Horiba",
+      "molecule": "Lipid",
+      "sha256": "9b3b9361e3dcb560727b578d2f3821eb8c3c0abe38fdef281b0f01d19a2103a5"
+    },
+    {
+      "relative_path": "rna _785 nm_600 gr_mm_2026_02_14_20_51_57_1_5s_x100_100_5__20_51_57_01.txt",
+      "instrument": "Horiba",
+      "molecule": "RNA",
+      "sha256": "075cf44bd0918d9dad935b527bd82094c41fd047352f04ab6af904bfd7820ea3"
+    }
+  ]
+}

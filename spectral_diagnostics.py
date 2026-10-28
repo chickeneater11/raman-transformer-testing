@@ -99,9 +99,19 @@ def read_amino_file(path, instrument):
     return pivot.columns.to_numpy(dtype=float), pivot.to_numpy(dtype=np.float64)
 
 
-def load_inputs(data_dir, cfg):
+def load_inputs(data_dir, cfg, raw_lipid_rna_manifest=None, raw_downloads_dir=None):
     grid = np.arange(cfg.low, cfg.high + 1, dtype=np.float64)
     data, rows, counts, inputs = {}, [], [], []
+    local_raw = None
+    if raw_lipid_rna_manifest is not None:
+        from raw_lipid_rna import load_raw_lipid_rna
+        local_raw = load_raw_lipid_rna(raw_lipid_rna_manifest, grid, downloads_dir=raw_downloads_dir,
+                                       max_per_class=cfg.max_per_class, seed=cfg.seed)
+        inputs.extend(local_raw["inputs"])
+        inputs.extend([
+            {"name": "raw_lipid_rna_manifest.json", "sha256": local_raw["manifest_sha256"], "role": "input_manifest"},
+            {"name": "raw_lipid_rna.py", "sha256": local_raw["loader_sha256"], "role": "loader_code"},
+        ])
     for instrument in INSTRUMENTS:
         short = instrument.lower()
         blocks = {}
@@ -110,15 +120,29 @@ def load_inputs(data_dir, cfg):
             inputs.append({"name": path.name, "sha256": file_hash(path), "bytes": path.stat().st_size})
             wn, raw = read_amino_file(path, instrument)
             blocks[label] = (path, wn, raw, np.arange(len(raw)))
-        path = data_dir / f"{short}_lipid_rna.csv"
-        inputs.append({"name": path.name, "sha256": file_hash(path), "bytes": path.stat().st_size})
-        frame = pd.read_csv(path)
-        if len(frame) != cfg.expected_lipid_rna_rows:
-            raise ValueError(f"{path.name}: expected {cfg.expected_lipid_rna_rows} rows for the notebook's positional RNA/Lipid labels; found {len(frame)}")
-        wn, raw = frame.columns.astype(float).to_numpy(), frame.to_numpy(dtype=np.float64)
-        for label, ids in (("RNA", np.arange(cfg.rna_rows)), ("Lipid", np.arange(cfg.rna_rows, len(raw)))):
-            blocks[label] = (path, wn, raw[ids], ids)
+        if local_raw is None:
+            path = data_dir / f"{short}_lipid_rna.csv"
+            inputs.append({"name": path.name, "sha256": file_hash(path), "bytes": path.stat().st_size})
+            frame = pd.read_csv(path)
+            if len(frame) != cfg.expected_lipid_rna_rows:
+                raise ValueError(f"{path.name}: expected {cfg.expected_lipid_rna_rows} rows for the notebook's positional RNA/Lipid labels; found {len(frame)}")
+            wn, raw = frame.columns.astype(float).to_numpy(), frame.to_numpy(dtype=np.float64)
+            for label, ids in (("RNA", np.arange(cfg.rna_rows)), ("Lipid", np.arange(cfg.rna_rows, len(raw)))):
+                blocks[label] = (path, wn, raw[ids], ids)
         for label in CLASSES:
+            if local_raw is not None and label in ("RNA", "Lipid"):
+                data[instrument, label] = local_raw["data"][instrument, label]
+                inventory = local_raw["inventory"].query("instrument == @instrument and `class` == @label")
+                selected_count = len(data[instrument, label])
+                if selected_count < 2:
+                    raise ValueError(f"{instrument}/{label}: need at least two spectra")
+                counts.append({"instrument": instrument, "class": label,
+                               "available": int(inventory.spectra.sum()), "selected": selected_count,
+                               "native_points": int(inventory.native_points.min()),
+                               "native_min": float(inventory.native_min.max()),
+                               "native_max": float(inventory.native_max.min())})
+                rows.extend(local_raw["rows"].query("instrument == @instrument and `class` == @label").to_dict("records"))
+                continue
             path, wn, raw, source_ids = blocks[label]
             ids = stable_indices(len(raw), cfg.max_per_class, cfg.seed, f"{instrument}/{label}")
             if len(ids) < 2:
@@ -348,7 +372,7 @@ def plot_response(grid, means, sds, result, cfg, view, out):
     return standardized
 
 
-def run_diagnostics(data_dir, output_root, cfg=None):
+def run_diagnostics(data_dir, output_root, cfg=None, *, raw_lipid_rna_manifest=None, raw_downloads_dir=None):
     cfg = cfg or DiagnosticConfig()
     if cfg.seed < 0 or cfg.max_per_class < 2 or cfg.high - cfg.low < cfg.coefficient_window:
         raise ValueError("Invalid seed, sample size, or spectral interval")
@@ -357,7 +381,7 @@ def run_diagnostics(data_dir, output_root, cfg=None):
     data_dir, output_root = Path(data_dir), Path(output_root)
     with threadpool_limits(limits=1), plt.rc_context({"axes.spines.top": False, "axes.spines.right": False,
                                                     "axes.grid": False, "font.family": "DejaVu Sans", "font.size": 10}):
-        grid, raw, selection, counts, inputs = load_inputs(data_dir, cfg)
+        grid, raw, selection, counts, inputs = load_inputs(data_dir, cfg, raw_lipid_rna_manifest, raw_downloads_dir)
         environment = {"python": sys.version, "platform": platform.platform(),
                        "packages": {p: version(p) for p in ("numpy", "pandas", "scipy", "matplotlib", "pybaselines", "threadpoolctl")}}
         identity = {"config": asdict(cfg), "inputs": inputs, "environment": environment,
@@ -393,11 +417,18 @@ def run_diagnostics(data_dir, output_root, cfg=None):
         metrics.to_csv(out / "held_out_metrics_all_views.csv", index=False, float_format="%.17g")
         np.savez_compressed(out / "numerical_results.npz", **arrays)
         fingerprints = {key: array_hash(value) for key, value in arrays.items()}
-        manifest = {**identity, "run_id": run_id, "class_order": CLASSES, "instrument_order": INSTRUMENTS,
+        source_notes = (
+            ["RNA/Lipid are original local TXT exports, before the Drive CSV preprocessing/filtering (user-confirmed).",
+             "RNA/Lipid class and instrument come from an explicit checksum-verified manifest; format-based instrument inference is validated on load."]
+            if raw_lipid_rna_manifest is not None else
+            ["Legacy lipid/RNA CSVs were already preprocessed and filtered (user-confirmed 2026-10-22).",
+             "Legacy RNA/Lipid labels inherit notebook row-order convention: first 375 RNA, next 375 Lipid."]
+        )
+        manifest = {**identity, "run_id": run_id,
+                    "lipid_rna_source": "original_local_txt" if raw_lipid_rna_manifest is not None else "legacy_processed_csv", "class_order": CLASSES, "instrument_order": INSTRUMENTS,
                     "selection_sha256": file_hash(out / "selected_rows.csv"), "array_sha256": fingerprints,
                     "selected_input_sha256": {f"{i}/{c}": array_hash(raw[i, c]) for i in INSTRUMENTS for c in CLASSES},
-                    "notes": ["As-loaded CSV lipid/RNA provenance may include earlier processing; not claimed to be raw detector data.",
-                              "RNA/Lipid labels inherit notebook row-order convention: first 375 RNA, next 375 Lipid.",
+                    "notes": source_notes + [
                               "No quality filtering, carbon-region deletion, KNN pairing, GPU, model training, or bootstrap.",
                               "Independent local PCG64 streams select rows; single-thread numerical libraries; float64 arithmetic.",
                               "SD is within selected spectra; correlated acquisition rows are not independent biological replicates.",

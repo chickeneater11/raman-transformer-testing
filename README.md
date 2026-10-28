@@ -89,3 +89,58 @@ Run the focused correctness checks with:
 ```bash
 .venv/bin/python -m unittest test_spectral_diagnostics -v
 ```
+
+
+## Original local RNA/lipid files
+
+Use the notebook's final section **Original RNA/lipid files from Downloads — local
+loading and diagnostics**. It runs independently in a fresh project kernel, loads all
+original local RNA/lipid TXT files, and rebuilds the seven-molecule diagnostics with
+those inputs. Files remain in Downloads; nothing is uploaded or copied to Drive.
+
+`raw_lipid_rna_manifest.json` explicitly records eight files, molecule labels, inferred
+instrument assignments, and SHA-256 checksums. `raw_lipid_rna.py` verifies each export's
+structure and checksum, reconstructs complete spectra, preserves file/index/X/Y
+provenance, and interpolates only within native coverage. No quality filtering,
+normalization, or baseline subtraction occurs in the loader. Format-based instrument
+assignments match the known project exports; vendor instrument IDs are not embedded.
+
+The default raw-file root is `~/Downloads`. Set `RAMAN_RAW_DIR` in `.env` or the notebook
+if the files move while preserving their subfolders. Missing/changed files fail loudly;
+the raw-input route never falls back to the filtered Drive CSVs. Do not change checksums
+without reviewing changed source files.
+
+The common raw-input analysis grid is **451–1450 cm⁻¹**, because original RNA/lipid
+exports start at 450.736/450.855 cm⁻¹. The historical 450 endpoint would require
+extrapolation. Other biomolecules are evaluated on the same new grid. Seed 42 selects
+750 per molecule/instrument for diagnostics, with recorded source rows. All 12,462
+original RNA/lipid spectra are also available in the notebook's
+`renishaw_lipid_rna_raw` / `horiba_lipid_rna_raw` frames, whose final three columns retain
+the existing metadata convention. File/position provenance is kept separately to avoid
+using it as a spectral feature.
+
+Raw-input results are isolated under `spectral_diagnostics_results/raw_local/`.
+Historical diagnostic and classifier results remain intact and use their prior input
+cohorts; they are not automatically converted into raw-input training experiments.
+The user confirmed on 2026-10-22 that the earlier lipid/RNA CSVs were preprocessed and
+filtered, so old results should not be described as tests of the full raw cohort.
+
+Python entry point:
+
+```python
+from pathlib import Path
+from spectral_diagnostics import DiagnosticConfig, run_diagnostics
+
+result = run_diagnostics(
+    data_dir, output_dir,
+    DiagnosticConfig(seed=42, low=451, high=1450),
+    raw_lipid_rna_manifest=Path("raw_lipid_rna_manifest.json"),
+    raw_downloads_dir=Path.home() / "Downloads",
+)
+```
+
+Run loader and existing diagnostic checks with:
+
+```bash
+.venv/bin/python -m unittest test_raw_lipid_rna test_spectral_diagnostics -v
+```
